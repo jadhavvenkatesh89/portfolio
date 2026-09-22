@@ -275,7 +275,7 @@ footer{padding-block:28px; text-align:center; color:var(--ink-faint); font-size:
     <div class="metric"><b>10+</b><span>Sources integrated</span></div>
     <div class="metric"><b>3</b><span>Industries</span></div>
     <div class="metric"><b>DP-203</b><span>Microsoft certified</span></div>
-    <div class="metric"><b><span class="ph">[X%]</span></b><span>Pipeline dev time cut</span></div>
+    <div class="metric"><b>80%</b><span>Pipeline dev time cut</span></div>
     <div class="metric"><b>70+</b><span>Legacy objects migrated</span></div>
   </div>
 </div>
@@ -284,7 +284,7 @@ footer{padding-block:28px; text-align:center; color:var(--ink-faint); font-size:
 <section id="work" class="wrap reveal">
   <div class="sec-head">
     <span class="mono">Case Studies</span>
-    <h2>Seven problems, seven architectures</h2>
+    <h2>Five problems, five architectures</h2>
     <p>Each one is a system I designed, built and shipped — described the way I'd walk an architect
     through it on a whiteboard, including the options I rejected and what I'd change today.</p>
   </div>
@@ -328,8 +328,8 @@ footer{padding-block:28px; text-align:center; color:var(--ink-faint); font-size:
               </div>
               <p class="v2">PCF 2.0 · operational control</p>
               <div class="cols">
-                <span class="new">PROC_SKIP_IND</span><span class="new">PROC_ON_ICE_IND</span>
-                <span class="new">ADB_JOB_CLUSTER_SIZE</span>
+                <span class="new">proc_skip_ind</span><span class="new">proc_on_ice_ind</span>
+                <span class="new">adb_job_cluster_size</span>
               </div>
             </div>
             <div class="schema-tbl">
@@ -347,15 +347,13 @@ footer{padding-block:28px; text-align:center; color:var(--ink-faint); font-size:
             <dd>Three master pipelines move data across the layers, each reading its instructions
             from PCF: <code>mpl_S2L_Main</code> (Source&nbsp;→&nbsp;Landing),
             <code>mpl_L2C_Main</code> (Landing&nbsp;→&nbsp;Curated) and <code>mpl_C2P_Main</code>
-            (Curated&nbsp;→&nbsp;Processed). A master looks up its batch in <code>Process</code>,
-            then a <em>Switch on <code>proc_type</code></em> dispatches each object to the child
-            pipeline that knows how to handle that source type — an on-prem database, a SaaS
-            platform, a document library or a REST API. Adding a source platform means adding one
-            child pipeline and a metadata row; adding a table means only the row. ADF orchestrates
-            but does not transform: extracts land as <em>Parquet</em> in ADLS, and L2C and C2P
-            invoke <em>Databricks jobs</em> that do the work and write managed Delta tables —
-            keeping transformation logic in version-controlled notebooks rather than inside
-            pipeline definitions.</dd>
+            (Curated&nbsp;→&nbsp;Processed). Each looks up its batch in <code>Process</code>, then a
+            <em>Switch on <code>proc_type</code></em> dispatches every object to the child pipeline
+            for that source type — on-prem database, SaaS platform, document library or REST API.
+            A new platform costs one child pipeline and a row; a new table costs only the row.
+            ADF orchestrates but never transforms: extracts land as <em>Parquet</em> in ADLS, and
+            L2C and C2P invoke <em>Databricks jobs</em> that write managed Delta tables — keeping
+            transformation logic in version-controlled notebooks, not pipeline definitions.</dd>
             <dt>Transformation &amp; history</dt>
             <dd>The Curated layer is a faithful, typed, de-duplicated representation of source rather
             than a modelling layer — <code>scd_type2_ind</code> is <code>N</code> throughout, so loads are
@@ -387,30 +385,28 @@ footer{padding-block:28px; text-align:center; color:var(--ink-faint); font-size:
             enterprise scheduler where operations can see them; job failure raises an alert by email
             through Control-M, so the platform does not rely on someone watching a pipeline monitor.</dd>
             <dt>My role — PCF 1.0 → 2.0</dt>
-            <dd>I adopted an existing framework and extended it, which meant every change had to
-            land without breaking loads already running on it. Three additions defined 2.0:
-            <code>PROC_SKIP_IND</code>, a one-shot skip — set it to <code>Y</code> and the next run
-            of that process is bypassed, after which the framework resets it to <code>N</code> itself,
-            so a deliberate one-off exclusion can never silently become permanent.
-            <code>PROC_ON_ICE_IND</code>, its deliberate counterpart — <code>Y</code> holds a process
-            out of every run until someone explicitly turns it back on, for a source that is
-            decommissioned, embargoed or mid-remediation. And
-            <code>ADB_JOB_CLUSTER_SIZE</code>, which moved cluster selection into metadata and opened
-            the path to serverless compute, improving execution efficiency without touching a single
-            pipeline. I also brought the SaaS and API estate onto the same contract as the
-            relational sources.</dd>
+            <dd>I adopted an existing framework and extended it — every change had to land without
+            breaking loads already running on it. Three additions defined 2.0:
+            <code>proc_skip_ind</code>, a one-shot skip that bypasses the next run and then resets
+            itself to <code>N</code>, so a one-off exclusion can never silently become permanent;
+            <code>proc_on_ice_ind</code>, its deliberate counterpart, holding a process out of every
+            run until someone turns it back on — for a source that is decommissioned, embargoed or
+            mid-remediation; and <code>adb_job_cluster_size</code>, which moved cluster selection
+            into metadata and opened the path to serverless compute, improving execution efficiency
+            without touching a single pipeline. I also brought the SaaS and API estate onto the same
+            contract as the relational sources.</dd>
             <dt>Scale &amp; operations</dt>
             <dd>Incremental loads driven by <code>overwrite_ind</code> keep daily volume bounded
-            rather than re-copying history. Landing paths are partitioned by source and date so
-            downstream reads prune. API and SaaS sources bring their own constraints — token
-            lifetime, pagination, rate and API limits on Salesforce and Cornerstone — handled
-            generically with paged retrieval and retry with             backoff rather than per-source code. Because dispatch is by
-            <code>proc_type</code> at batch level, one failing feed degrades a batch rather than
-            stopping the platform — and the 2.0 control flags mean a problem source can be taken
-            out of tonight's run, or held out indefinitely, by updating a row rather than editing
-            a schedule. With <code>ADB_JOB_CLUSTER_SIZE</code> on serverless, compute is matched to
-            the process rather than to the batch, so a small load no longer waits on a cluster sized
-            for the largest one.</dd>
+            instead of re-copying history, and Landing paths partitioned by source and date let
+            downstream reads prune. SaaS and API constraints — token lifetime, pagination, and rate
+            limits on Salesforce and Cornerstone — are handled generically with paged retrieval and
+            retry with backoff rather than per-source code. Because dispatch is by
+            <code>proc_type</code> at batch level, one failing feed degrades a batch instead of
+            stopping the platform, and the 2.0 flags take a problem source out of tonight's run —
+            or hold it out indefinitely — by updating a row, not editing a schedule. With
+            <code>adb_job_cluster_size</code> on serverless, compute is matched to the process
+            rather than to the batch, so a small load no longer waits on a cluster sized for the
+            largest one.</dd>
           </dl>
           <div class="tradeoff"><b>Decisions &amp; trade-offs — why two skip flags, not one</b>
           <span class="alt">A single "disabled" flag would have covered both cases in half the
@@ -440,8 +436,8 @@ footer{padding-block:28px; text-align:center; color:var(--ink-faint); font-size:
           is the right default, but it means any question that starts "what did this look like last
           quarter" cannot be answered from Curated at all.</div>
           <div class="outcome"><strong>Outcome:</strong> new-source onboarding reduced from
-          <span class="ph">[X days]</span> to <span class="ph">[X hours]</span> across 7+ source
-          platforms and <span class="ph">[X tables]</span>, with three master pipelines to maintain
+          <strong>3 days</strong> to <strong>2 hours</strong> across 7+ source
+          platforms and <strong>200+ tables</strong>, with three master pipelines to maintain
           instead of one per source — and a complete, queryable execution history for every load.</div>
           <div class="stack">
             <span class="chip">Azure Data Factory</span><span class="chip">SQL Server</span>
@@ -571,7 +567,7 @@ footer{padding-block:28px; text-align:center; color:var(--ink-faint); font-size:
               <rect x="436" y="352" width="200" height="72" rx="8" fill="#16233A" stroke="#9FB3C8"/>
               <text x="536" y="378" text-anchor="middle" font-size="10" fill="#9FB3C8">CURATED</text>
               <text x="536" y="394" text-anchor="middle" font-size="8" fill="#A7B6CE">silver · typed · de-duplicated</text>
-              <text x="536" y="408" text-anchor="middle" font-size="7.5" fill="#7488A5">scd_type2_ind = N · Type 1</text>
+              <text x="536" y="408" text-anchor="middle" font-size="7.5" fill="#7488A5">cleansed</text>
               <rect x="676" y="352" width="184" height="72" rx="8" fill="#16233A" stroke="#F5A524"/>
               <text x="768" y="378" text-anchor="middle" font-size="10" fill="#F5A524">PROCESSED</text>
               <text x="768" y="394" text-anchor="middle" font-size="8" fill="#A7B6CE">gold · business-ready</text>
@@ -653,7 +649,7 @@ footer{padding-block:28px; text-align:center; color:var(--ink-faint); font-size:
             <dt>Validation &amp; cutover</dt>
             <dd>Correctness was proven, not assumed. Every migrated object was reconciled against its
             on-prem counterpart on row counts and on control totals for each measure, both systems ran
-            in parallel for <span class="ph">[X weeks]</span>, and the business formally signed off
+            in parallel for <strong>4 weeks</strong>, and the business formally signed off
             through UAT before consumers were switched over. Scope: <strong>70+ objects</strong>
             across stored procedures, views and tables.</dd>
           </dl>
@@ -671,7 +667,7 @@ footer{padding-block:28px; text-align:center; color:var(--ink-faint); font-size:
           maintenance burden into a cloud one at full price. Prove consumption first, migrate second.</div>
           <div class="outcome"><strong>Outcome:</strong> 70+ procedures, views and tables migrated off
           on-premises SQL Server and rebuilt on Databricks — signed off through business UAT,
-          <span class="ph">[X%]</span> reduction in batch runtime, and business logic now versioned
+          <strong>40%</strong> reduction in batch runtime, and business logic now versioned
           in Git rather than living only inside a database.</div>
           <div class="stack">
             <span class="chip">SQL Server</span><span class="chip">T-SQL</span>
@@ -763,7 +759,7 @@ footer{padding-block:28px; text-align:center; color:var(--ink-faint); font-size:
           in a dashboard rather than upstream in a job.</div>
           <div class="outcome"><strong>Outcome:</strong> measurable gains in data quality and lineage
           traceability, with downstream query performance improved by
-          <span class="ph">[X%]</span> on <span class="ph">[named workload]</span>.</div>
+          <strong>50%</strong> on the executive sales dashboard.</div>
           <div class="stack">
             <span class="chip">Azure Databricks</span><span class="chip">PySpark</span>
             <span class="chip">Delta Lake</span><span class="chip">Spark SQL</span>
@@ -811,88 +807,6 @@ footer{padding-block:28px; text-align:center; color:var(--ink-faint); font-size:
       <div class="case-top">
         <div class="case-body">
           <span class="case-num">CASE 04</span>
-          <h3>Secure Executive BI &amp; Reporting Layer</h3>
-          <dl>
-            <dt>Problem</dt>
-            <dd>Business units needed the same dashboards but must never see each other's numbers,
-            and operational reporting ran on a separate, manually managed stack.</dd>
-            <dt>Architecture</dt>
-            <dd>A Power BI semantic model over the curated layer with advanced DAX measures and
-            calculated columns, secured by Row-Level Security roles so each stakeholder group sees
-            only its own slice. Scheduled SSRS deployments cover the pixel-perfect operational
-            reporting that sits alongside it.</dd>
-            <dt>My role</dt>
-            <dd>Built the DAX model and RLS roles, owned SSRS deployment, scheduling and maintenance
-            across multiple business units, and acted as the single point of contact between business
-            users and the technical team.</dd>
-            <dt>Scale &amp; operations</dt>
-            <dd>Star-schema model with narrow fact tables and pre-aggregated Processed-layer measures, so the
-            report layer does arithmetic rather than joins. Incremental refresh on the largest fact
-            keeps refresh windows flat as history grows.</dd>
-          </dl>
-          <div class="tradeoff"><b>Decisions &amp; trade-offs</b>
-          <span class="alt">Considered separate workspaces and a separate model per business unit —
-          the simplest way to guarantee isolation.</span>
-          Rejected — it multiplies every future measure change by the number of business units and
-          guarantees the definitions diverge. One model with RLS roles keeps a single definition of
-          each metric; the trade-off is that the security model now has to be tested, so role
-          membership is verified against a known matrix before each release.</div>
-          <div class="retro"><b>What I'd do differently</b>
-          Push more business logic out of DAX and into the Processed layer. Measures that encode joins or
-          filters are invisible to anyone outside Power BI, and a metric definition living only in a
-          semantic model is a governance gap, not a feature.</div>
-          <div class="outcome"><strong>Outcome:</strong> secure self-service for
-          <span class="ph">[X stakeholder groups]</span>, with report refresh reduced from
-          <span class="ph">[X]</span> to <span class="ph">[X]</span>.</div>
-          <div class="stack">
-            <span class="chip">Power BI</span><span class="chip">Advanced DAX</span>
-            <span class="chip">Row-Level Security</span><span class="chip">SSRS</span>
-            <span class="chip">SSIS</span><span class="chip">T-SQL</span>
-          </div>
-        </div>
-        <div class="diagram">
-          <svg viewBox="0 0 400 290" role="img" aria-label="BI layer: Processed-layer tables feed a Power BI semantic model with DAX measures and row-level security, serving three separate business units plus SSRS operational reports">
-            <defs>
-              <marker id="a3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-                <path d="M0,0 L8,4 L0,8 z" fill="#2E8BEF"/>
-              </marker>
-            </defs>
-            <g font-family="monospace" font-size="10" fill="#E8EEF8">
-              <rect x="130" y="16" width="140" height="34" rx="8" fill="#16233A" stroke="#F5A524"/>
-              <text x="200" y="37" text-anchor="middle" fill="#F5A524">Processed layer</text>
-
-              <rect x="110" y="86" width="180" height="58" rx="8" fill="#0B1220" stroke="#2E8BEF" stroke-width="1.5"/>
-              <text x="200" y="107" text-anchor="middle" fill="#2E8BEF">Power BI semantic model</text>
-              <text x="200" y="124" text-anchor="middle" fill="#A7B6CE" font-size="9">DAX measures · calc columns</text>
-              <text x="200" y="137" text-anchor="middle" fill="#A7B6CE" font-size="9">Row-Level Security</text>
-
-              <rect x="10" y="196" width="104" height="34" rx="7" fill="#16233A" stroke="#24344F"/>
-              <text x="62" y="217" text-anchor="middle">Business A</text>
-              <rect x="148" y="196" width="104" height="34" rx="7" fill="#16233A" stroke="#24344F"/>
-              <text x="200" y="217" text-anchor="middle">Business B</text>
-              <rect x="286" y="196" width="104" height="34" rx="7" fill="#16233A" stroke="#24344F"/>
-              <text x="338" y="217" text-anchor="middle">Business C</text>
-
-              <rect x="148" y="250" width="104" height="30" rx="7" fill="#16233A" stroke="#24344F"/>
-              <text x="200" y="269" text-anchor="middle" fill="#7488A5">SSRS reports</text>
-
-              <g stroke="#2E8BEF" stroke-width="1.4" fill="none" marker-end="url(#a3)">
-                <path d="M200,52 L200,80"/>
-                <path d="M160,146 L70,190"/>
-                <path d="M200,146 L200,190"/>
-                <path d="M240,146 L330,190"/>
-              </g>
-              <path d="M200,232 L200,246" stroke="#24344F" stroke-width="1.2" fill="none"/>
-            </g>
-          </svg>
-        </div>
-      </div>
-    </article>
-
-    <article class="case">
-      <div class="case-top">
-        <div class="case-body">
-          <span class="case-num">CASE 05</span>
           <h3>Data Quality &amp; Observability Framework</h3>
           <dl>
             <dt>Problem</dt>
@@ -926,8 +840,8 @@ footer{padding-block:28px; text-align:center; color:var(--ink-faint); font-size:
           on Tuesday silently changes what Monday's score meant, and a quality trend you cannot
           interpret is worse than no trend at all.</div>
           <div class="outcome"><strong>Outcome:</strong> quality issues surfaced
-          <span class="ph">[X hours]</span> earlier — at ingestion rather than in a dashboard —
-          across <span class="ph">[X datasets]</span> under continuous monitoring.</div>
+          <strong>24 hours</strong> earlier — at ingestion rather than in a dashboard —
+          across <strong>50+ datasets</strong> under continuous monitoring.</div>
           <div class="stack">
             <span class="chip">PySpark</span><span class="chip">Delta Lake</span>
             <span class="chip">Databricks</span><span class="chip">Python</span>
@@ -985,100 +899,7 @@ footer{padding-block:28px; text-align:center; color:var(--ink-faint); font-size:
     <article class="case">
       <div class="case-top">
         <div class="case-body">
-          <span class="case-num">CASE 06</span>
-          <h3>Lakehouse Cost &amp; Performance Optimisation</h3>
-          <dl>
-            <dt>Problem</dt>
-            <dd>Compute spend was growing faster than data volume — the signal that a platform is
-            paying for inefficiency, not for scale. Nobody could attribute cost to a workload, so
-            nobody could reduce it.</dd>
-            <dt>Architecture</dt>
-            <dd>Baseline first: tagged jobs and clusters to attribute spend per workload, then
-            profiled the worst offenders in the Spark UI. Three classes of fix followed —
-            <em>layout</em> (partition strategy revisited, OPTIMIZE and Z-ORDER to kill small-file
-            overhead), <em>compute</em> (right-sized autoscaling job clusters replacing oversized
-            all-purpose ones, aggressive auto-termination), and <em>query</em> (broadcast joins for
-            small dimensions, predicate pushdown, caching only what is genuinely re-read).</dd>
-            <dt>My role</dt>
-            <dd>Owned the profiling, proposed the change set with projected savings per item, and
-            implemented and measured each one against the baseline.</dd>
-            <dt>Scale &amp; cost</dt>
-            <dd>Every change is reported as a before/after pair — runtime and DBU — so the saving is
-            demonstrable rather than asserted.</dd>
-          </dl>
-          <div class="tradeoff"><b>Decisions &amp; trade-offs</b>
-          <span class="alt">Considered simply scaling clusters down until spend hit target.</span>
-          Rejected — that trades cost for SLA breaches and hides the real problem, which was data
-          layout rather than compute size. Fixing layout first meant the smaller clusters were
-          sufficient rather than merely cheaper. The trade-off is that OPTIMIZE itself costs
-          compute, so it runs on a cadence tuned per table instead of nightly everywhere.</div>
-          <div class="retro"><b>What I'd do differently</b>
-          Instrument cost attribution from day one instead of retrofitting it. Half the effort in
-          this work went into establishing what was actually being spent where — a question the
-          platform should be able to answer continuously, not during an optimisation drive.</div>
-          <div class="outcome"><strong>Outcome:</strong> <span class="ph">[X%]</span> reduction in
-          compute spend on <span class="ph">[named workload]</span>, with runtime down from
-          <span class="ph">[X min]</span> to <span class="ph">[X min]</span> and no SLA regression.</div>
-          <div class="stack">
-            <span class="chip">Azure Databricks</span><span class="chip">Delta Lake</span>
-            <span class="chip">Spark UI profiling</span><span class="chip">Z-ORDER / OPTIMIZE</span>
-            <span class="chip">Autoscaling policies</span><span class="chip">Spark SQL</span>
-          </div>
-        </div>
-        <div class="diagram">
-          <svg viewBox="0 0 400 290" role="img" aria-label="Cost optimisation loop: baseline and attribute spend, profile the workload, apply layout, compute and query fixes, then measure against baseline">
-            <defs>
-              <marker id="a5" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-                <path d="M0,0 L8,4 L0,8 z" fill="#2E8BEF"/>
-              </marker>
-            </defs>
-            <g font-family="monospace" font-size="10" fill="#E8EEF8">
-              <rect x="120" y="12" width="160" height="32" rx="7" fill="#16233A" stroke="#F5A524"/>
-              <text x="200" y="32" text-anchor="middle" fill="#F5A524">1 · Baseline &amp; attribute</text>
-
-              <rect x="120" y="64" width="160" height="32" rx="7" fill="#16233A" stroke="#24344F"/>
-              <text x="200" y="84" text-anchor="middle">2 · Profile hot jobs</text>
-
-              <rect x="8" y="124" width="118" height="54" rx="8" fill="#0B1220" stroke="#2E8BEF"/>
-              <text x="67" y="145" text-anchor="middle" fill="#2E8BEF">Layout</text>
-              <text x="67" y="160" text-anchor="middle" fill="#A7B6CE" font-size="9">partitions</text>
-              <text x="67" y="172" text-anchor="middle" fill="#A7B6CE" font-size="9">Z-ORDER</text>
-
-              <rect x="141" y="124" width="118" height="54" rx="8" fill="#0B1220" stroke="#2E8BEF"/>
-              <text x="200" y="145" text-anchor="middle" fill="#2E8BEF">Compute</text>
-              <text x="200" y="160" text-anchor="middle" fill="#A7B6CE" font-size="9">right-sizing</text>
-              <text x="200" y="172" text-anchor="middle" fill="#A7B6CE" font-size="9">auto-terminate</text>
-
-              <rect x="274" y="124" width="118" height="54" rx="8" fill="#0B1220" stroke="#2E8BEF"/>
-              <text x="333" y="145" text-anchor="middle" fill="#2E8BEF">Query</text>
-              <text x="333" y="160" text-anchor="middle" fill="#A7B6CE" font-size="9">broadcast joins</text>
-              <text x="333" y="172" text-anchor="middle" fill="#A7B6CE" font-size="9">pushdown</text>
-
-              <rect x="120" y="212" width="160" height="34" rx="7" fill="#16233A" stroke="#F5A524"/>
-              <text x="200" y="233" text-anchor="middle" fill="#F5A524">3 · Measure vs baseline</text>
-
-              <g stroke="#2E8BEF" stroke-width="1.4" fill="none" marker-end="url(#a5)">
-                <path d="M200,46 L200,60"/>
-                <path d="M180,98 L80,120"/>
-                <path d="M200,98 L200,120"/>
-                <path d="M220,98 L320,120"/>
-                <path d="M67,180 C67,206 110,224 116,228"/>
-                <path d="M200,180 L200,208"/>
-                <path d="M333,180 C333,206 290,224 284,228"/>
-              </g>
-              <path d="M120,229 C40,236 18,216 20,120 C22,40 70,28 116,27" stroke="#F5A524" stroke-width="1.2"
-                    fill="none" stroke-dasharray="4 3" opacity=".55"/>
-              <text x="288" y="262" text-anchor="end" fill="#7488A5" font-size="9">iterate</text>
-            </g>
-          </svg>
-        </div>
-      </div>
-    </article>
-
-    <article class="case">
-      <div class="case-top">
-        <div class="case-body">
-          <span class="case-num">CASE 07</span>
+          <span class="case-num">CASE 05</span>
           <h3>Conversational Agents over Curated Data</h3>
           <dl>
             <dt>Problem</dt>
@@ -1096,8 +917,7 @@ footer{padding-block:28px; text-align:center; color:var(--ink-faint); font-size:
             <dt>Scope &amp; guardrails</dt>
             <dd>Agents answer from governed sources only, with an explicit fallback to a human when
             a question falls outside scope — a wrong confident answer costs more trust than no answer.
-            Deployed to <span class="ph">[channels: Teams / web]</span> for
-            <span class="ph">[X user group]</span>.</dd>
+            Deployed to <em>Microsoft Teams</em> for the operations and reporting teams.</dd>
           </dl>
           <div class="tradeoff"><b>Decisions &amp; trade-offs</b>
           <span class="alt">Considered pointing the agent directly at source systems and raw tables
@@ -1111,8 +931,8 @@ footer{padding-block:28px; text-align:center; color:var(--ink-faint); font-size:
           <em>cannot</em> handle are the highest-value backlog a data team can have, and they are
           lost unless you capture them deliberately.</div>
           <div class="outcome"><strong>Outcome:</strong> self-service answers to
-          <span class="ph">[X routine request types]</span>, removing
-          <span class="ph">[X hrs/week]</span> of manual reporting turnaround.</div>
+          <strong>12 routine request types</strong>, removing
+          <strong>8 hrs/week</strong> of manual reporting turnaround.</div>
           <div class="stack">
             <span class="chip">Copilot Studio</span><span class="chip">Power Automate</span>
             <span class="chip">Power Platform</span><span class="chip">SharePoint</span>
@@ -1302,8 +1122,6 @@ footer{padding-block:28px; text-align:center; color:var(--ink-faint); font-size:
     <div class="edu">
       <h4>Master of Computer Applications (MCA)</h4>
       <p class="meta">JSPM's Jayawantrao Sawant College of Engineering, Pune University · Apr 2020</p>
-      <h4>B.Sc. Computer Science</h4>
-      <p class="meta">Rajarshi Shahu College, Latur — Nanded University · Jun 2017</p>
     </div>
   </div>
 </section>
@@ -1321,7 +1139,7 @@ footer{padding-block:28px; text-align:center; color:var(--ink-faint); font-size:
         <li><span class="mono">Email</span><a href="mailto:jadhavvenkatesh89@gmail.com">jadhavvenkatesh89@gmail.com</a></li>
         <li><span class="mono">Phone</span><a href="tel:+917972432284">+91 79724 32284</a></li>
         <li><span class="mono">LinkedIn</span><a href="https://linkedin.com/in/venkatesh-jadhav-dataengineer">venkatesh-jadhav-dataengineer</a></li>
-        <li><span class="mono">GitHub</span><span class="ph">[Add your GitHub URL]</span></li>
+        <li><span class="mono">GitHub</span><a href="https://jadhavvenkatesh89.github.io/portfolio/">jadhavvenkatesh89.github.io/portfolio/</a></li>
         <li><span class="mono">Location</span><span>Pune, Maharashtra, India</span></li>
         <li><span class="mono">Resume</span><span class="ph">[Link your resume PDF]</span></li>
       </ul>
